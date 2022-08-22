@@ -141,6 +141,7 @@ async def start_playing(voice_client):
 		await event.wait()
 	
 	await voice_client.disconnect()
+	shutil.rmtree('session/') # temporary cleanup procedure, will add caching later
 
 bot.start_playing = start_playing
 
