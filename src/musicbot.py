@@ -1,8 +1,9 @@
 from asyncio import sleep
 import discord
 from discord.ext import commands
-import yt_dlp
 from config import *
+from pytube import YouTube, Playlist
+import shutil
 
 config_path = "config.json"
 
@@ -71,20 +72,6 @@ async def play(ctx, *arg):
 		await ctx.send("you do not have the role to play music")
 		return
 
-	ydl_opts = {
-		'format': 'mp4',
-		'quiet': True,
-		'paths': {
-			'home': './session/'
-		},
-		'outtmpl': {
-			'default': '%(autonumber)s.%(ext)s',
-		},
-		'postprocessors': [{
-			'key': 'FFmpegExtractAudio',
-		}],
-	}
-
 	try:
 		await ctx.voice_client.disconnect()
 	except:
@@ -92,20 +79,31 @@ async def play(ctx, *arg):
 
 	url = arg[0]
 
-	with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-		info = ydl.extract_info(url, download=False)
-		duration = info.get('duration')
-		name = info.get('title')
-		if duration < 1200:
-			await ctx.send("downloading music requested: {0}".format(name))
-			ydl.download([url])
-			audio = "session/00001.m4a"
-			await ctx.author.voice.channel.connect()
-			ctx.voice_client.play(discord.FFmpegPCMAudio(audio), after=lambda e: print('Player error: %s' % e) if e else None)
-			while ctx.voice_client.is_playing():
-				await sleep(0.01)
-			await ctx.voice_client.disconnect()
-		else:
-			await ctx.send("music requested was too long ({0} > 1200)".format(duration))
+	yt = YouTube(url)
+	name = yt.title
+	duration = yt.length
+
+	filepath = 'session/'
+	fileprefix = ''
+	filename = name
+
+	if duration < 1200:
+		await ctx.send("downloading music requested: {0}".format(name))
+
+		yt.streams.filter(only_audio=True, file_extension='mp4').last().download(output_path=filepath, filename=filename, filename_prefix=fileprefix)
+
+		path = filepath + fileprefix + filename
+
+		await ctx.author.voice.channel.connect()
+		ctx.voice_client.play(discord.FFmpegPCMAudio(path), after=lambda e: print('Player error: %s' % e) if e else None)
+
+		while ctx.voice_client.is_playing():
+			await sleep(0.01)
+		await ctx.voice_client.disconnect()
+
+	else:
+		await ctx.send("music requested was too long ({0} > 1200)".format(duration))
+
+	shutil.rmtree('session/') # temporary cleanup procedure, will add caching later
 
 bot.run(token)
