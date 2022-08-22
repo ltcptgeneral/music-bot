@@ -10,15 +10,19 @@ ffmpeg_options = {
 	'options': '-vn'
 }
 
-token = get_token(config_path)
-
-async def determine_prefix(bot, message):
-	return get_prefix(config_path)
+config = {}
+x = load_config(config_path, config)
+if x == 1:
+	print('Failed to load config, exiting')
+	exit(1)
+token = config['guild']['token']
+prefix = config['guild']['prefix']
 
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
-bot = commands.Bot(command_prefix = determine_prefix, description='very cool', intents = intents)
+bot = commands.Bot(command_prefix = prefix, description='very cool', intents = intents)
+bot.config = config
 
 @bot.event
 async def on_ready():
@@ -33,9 +37,8 @@ async def setprefix(ctx, *arg):
 	else:
 		prefix = arg[0]
 
-		with open("prefix", "w") as f:
-			f.write(prefix)
-			f.close()
+		bot.config['guild']['prefix'] = prefix
+		save_config(config_path, bot.config)
 
 		await ctx.send("set prefix to: {0}".format(prefix))
 
@@ -47,14 +50,26 @@ async def setrole(ctx, *arg: discord.Role):
 	else:
 		roleid = arg[0].id
 
-		with open("roleid", "w") as f:
-			f.write(str(roleid))
-			f.close()
+		bot.config['guild']['roleid'] = roleid
+		save_config(config_path, bot.config)
 
-		await ctx.send("set followable role to {0}".format(arg[0]))
+		await ctx.send("set playable role to {0}".format(arg[0]))
 
 @bot.command()
-async def playmusic(ctx, *arg):
+async def play(ctx, *arg):
+
+	roleid = bot.config['guild']['roleid']
+
+	if(len(arg) != 1):
+		await ctx.send("usage: play <YouTube url>")
+		return
+	elif(ctx.author.voice == None):
+		await ctx.send("you're not in a voice channel")
+		return
+	elif(roleid not in [role.id for role in ctx.author.roles]):
+		print()
+		await ctx.send("you do not have the role to play music")
+		return
 
 	ydl_opts = {
 		'format': 'mp4',

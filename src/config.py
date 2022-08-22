@@ -4,7 +4,7 @@ sample_json = """
 {
 	"guild":{
 		"token": "",
-		"prefix": "$",
+		"prefix": "?",
 		"roleid": 0,
 		"username": "music-bot"
 	},
@@ -28,35 +28,3 @@ def save_config(path, config_vector):
 	json.dump(config_vector, f, ensure_ascii=False, indent=4)
 	f.close()
 	return 0
-
-def get_token(config_path):
-	config_vector = {}
-	success = load_config(config_path, config_vector)
-	if success == 0:
-		return config_vector["guild"]["token"]
-	else:
-		return None
-
-def get_prefix(config_path):
-	config_vector = {}
-	success = load_config(config_path, config_vector)
-	if success == 0:
-		return config_vector["guild"]["prefix"]
-	else:
-		return None
-
-def get_roleid(config_path):
-	config_vector = {}
-	success = load_config(config_path, config_vector)
-	if success == 0:
-		return config_vector["guild"]["roleid"]
-	else:
-		return None
-
-def get_username(config_path):
-	config_vector = {}
-	success = load_config(config_path, config_vector)
-	if success == 0:
-		return config_vector["guild"]["username"]
-	else:
-		return None
