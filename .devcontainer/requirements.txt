@@ -1,0 +1,4 @@
+discord
+PyNaCl
+pytube
+yt_dlp
