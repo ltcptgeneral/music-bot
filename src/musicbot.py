@@ -1,9 +1,11 @@
-from asyncio import sleep
+import asyncio
 import discord
 from discord.ext import commands
 from config import *
 from pytube import YouTube, Playlist
 import shutil
+
+from music_queue import music_queue
 
 config_path = "config.json"
 
@@ -57,6 +59,29 @@ async def setrole(ctx, *arg: discord.Role):
 		await ctx.send("set playable role to {0}".format(arg[0]))
 
 @bot.command()
+async def join(ctx):
+
+	roleid = bot.config['guild']['roleid']
+
+	if not ctx.message.author.voice:
+		await ctx.send("You are not connected to a voice channel!")
+		return
+	elif(roleid not in [role.id for role in ctx.author.roles]):
+		await ctx.send("you do not have the role to play music")
+		return
+	else:
+		channel = ctx.message.author.voice.channel
+		bot.queue = music_queue()
+		await ctx.send(f'Connected to ``{channel}``')
+		await channel.connect()
+		return
+
+@bot.command()
+async def leave(ctx):
+
+	await ctx.voice_client.disconnect()
+
+@bot.command()
 async def play(ctx, *arg):
 
 	roleid = bot.config['guild']['roleid']
@@ -68,42 +93,55 @@ async def play(ctx, *arg):
 		await ctx.send("you're not in a voice channel")
 		return
 	elif(roleid not in [role.id for role in ctx.author.roles]):
-		print()
 		await ctx.send("you do not have the role to play music")
 		return
 
-	try:
-		await ctx.voice_client.disconnect()
-	except:
-		pass
-
 	url = arg[0]
 
-	yt = YouTube(url)
-	name = yt.title
-	duration = yt.length
-
-	filepath = 'session/'
-	fileprefix = ''
-	filename = name
-
-	if duration < 1200:
-		await ctx.send("downloading music requested: {0}".format(name))
-
-		yt.streams.filter(only_audio=True, file_extension='mp4').last().download(output_path=filepath, filename=filename, filename_prefix=fileprefix)
-
-		path = filepath + fileprefix + filename
-
-		await ctx.author.voice.channel.connect()
-		ctx.voice_client.play(discord.FFmpegPCMAudio(path), after=lambda e: print('Player error: %s' % e) if e else None)
-
-		while ctx.voice_client.is_playing():
-			await sleep(0.01)
-		await ctx.voice_client.disconnect()
-
+	if 'list=' in url:
+		pl = Playlist(url)
+		for video in pl:
+			yt = YouTube(video)
+			bot.queue.enqueue(yt)
 	else:
-		await ctx.send("music requested was too long ({0} > 1200)".format(duration))
+		yt = YouTube(url)
+		bot.queue.enqueue(url)
 
-	shutil.rmtree('session/') # temporary cleanup procedure, will add caching later
+	if(ctx.voice_client.is_playing()):
+		pass
+	else:
+		await bot.start_playing(ctx.voice_client)
+
+async def start_playing(voice_client):
+
+	event = asyncio.Event()
+	event.set()
+
+	while bot.queue.has_next():
+
+		event.clear()
+
+		yt = bot.queue.dequeue()
+		name = yt.title
+		duration = yt.length
+
+		filepath = 'session/'
+		fileprefix = ''
+		filename = name
+
+		if duration < 1200:
+
+			yt.streams.filter(only_audio=True, file_extension='mp4').last().download(output_path=filepath, filename=filename, filename_prefix=fileprefix)
+			path = filepath + fileprefix + filename
+			voice_client.play(discord.FFmpegPCMAudio(path), after=lambda e:event.set())
+
+		else:
+			pass
+
+		await event.wait()
+	
+	await voice_client.disconnect()
+
+bot.start_playing = start_playing
 
 bot.run(token)
