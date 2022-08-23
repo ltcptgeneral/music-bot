@@ -132,7 +132,7 @@ async def play(ctx, *arg):
 		bot.queue.enqueue(yt)
 		await ctx.send('added {0} to queue'.format(yt.title))
 
-	if(ctx.voice_client.is_playing()):
+	if(ctx.voice_client.is_connected()):
 		pass
 	else:
 		await bot.start_playing(ctx)
