@@ -175,7 +175,9 @@ async def start_playing(ctx):
 	except Exception as e:
 		print(e)
 
+	await ctx.voice_client.disconnect()
 	bot.queue = None
+	shutil.rmtree('session/') # temporary cleanup procedure, will add caching later
 
 bot.start_playing = start_playing
 
