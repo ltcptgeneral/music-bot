@@ -82,6 +82,7 @@ async def leave(ctx):
 
 	await ctx.voice_client.disconnect()
 	bot.queue = None
+	shutil.rmtree('session/') # temporary cleanup procedure, will add caching later
 
 @bot.command()
 async def skip(ctx):
@@ -141,33 +142,40 @@ async def start_playing(ctx):
 	event = asyncio.Event()
 	event.set()
 
-	while bot.queue.has_next():
+	try:
 
-		event.clear()
+		while bot.queue.has_next():
 
-		yt = bot.queue.dequeue()
-		name = yt.title
-		duration = yt.length
+			event.clear()
 
-		filepath = 'session/'
-		fileprefix = ''
-		filename = name
+			yt = bot.queue.dequeue()
+			name = yt.title
+			duration = yt.length
 
-		if duration < bot.config['max-length']:
+			filepath = 'session/'
+			fileprefix = ''
+			filename = name
 
-			await ctx.send('playing {0} | {1} tracks remaining in queue'.format(name, len(bot.queue.elem)))
+			if duration < bot.config['max-length']:
 
-			yt.streams.filter(only_audio=True, file_extension='mp4').last().download(output_path=filepath, filename=filename, filename_prefix=fileprefix)
-			path = filepath + fileprefix + filename
-			ctx.voice_client.play(discord.FFmpegPCMAudio(path), after=lambda e:event.set())
+				await ctx.send('playing {0} | {1} tracks remaining in queue'.format(name, len(bot.queue.elem)))
 
-		else:
-			await ctx.send('{0} is too long: {1} > {2}'.format(name, duration, bot.config['max-length']))
+				yt.streams.filter(only_audio=True, file_extension='mp4').last().download(output_path=filepath, filename=filename, filename_prefix=fileprefix)
+				path = filepath + fileprefix + filename
+				ctx.voice_client.play(discord.FFmpegPCMAudio(path), after=lambda e:event.set())
 
-		await event.wait()
-	
-	await ctx.voice_client.disconnect()
-	shutil.rmtree('session/') # temporary cleanup procedure, will add caching later
+			else:
+				await ctx.send('{0} is too long: {1} > {2}'.format(name, duration, bot.config['max-length']))
+
+			await event.wait()
+
+	except AttributeError:
+		pass
+
+	except Exception as e:
+		print(e)
+
+	bot.queue = None
 
 bot.start_playing = start_playing
 
