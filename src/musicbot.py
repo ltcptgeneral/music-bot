@@ -132,7 +132,7 @@ async def play(ctx, *arg):
 		bot.queue.enqueue(yt)
 		await ctx.send('added {0} to queue'.format(yt.title))
 
-	if(ctx.voice_client.is_connected()):
+	if(ctx.voice_client.is_playing()):
 		pass
 	else:
 		await bot.start_playing(ctx)
@@ -162,6 +162,7 @@ async def start_playing(ctx):
 
 				yt.streams.filter(only_audio=True, file_extension='mp4').last().download(output_path=filepath, filename=filename, filename_prefix=fileprefix)
 				path = filepath + fileprefix + filename
+				print("play here")
 				ctx.voice_client.play(discord.FFmpegPCMAudio(path), after=lambda e:event.set())
 
 			else:
