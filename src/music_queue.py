@@ -12,4 +12,4 @@ class music_queue:
 		else:
 			return self.elem.pop(0)
 	def has_next(self):
-		return len(self.elem) == 0
+		return len(self.elem) != 0
