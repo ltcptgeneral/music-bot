@@ -1,7 +1,8 @@
 import asyncio
+from config import *
 import discord
 from discord.ext import commands
-from config import *
+from embed import get_status
 from pytube import YouTube, Playlist
 import shutil
 
@@ -31,7 +32,8 @@ bot.config = config
 async def on_ready():
 	print('Logged in as {0} ({0.id})'.format(bot.user))
 	print('------')
-	bot.queue = None
+	bot.queue = music_queue()
+	bot.currently_playing = ""
 
 @bot.command()
 async def setprefix(ctx, *arg):
@@ -60,28 +62,10 @@ async def setrole(ctx, *arg: discord.Role):
 		await ctx.send("set playable role to {0}".format(arg[0]))
 
 @bot.command()
-async def join(ctx):
-
-	roleid = bot.config['guild']['roleid']
-
-	if not ctx.message.author.voice:
-		await ctx.send("You are not connected to a voice channel!")
-		return
-	elif(roleid not in [role.id for role in ctx.author.roles]):
-		await ctx.send("you do not have the role to play music")
-		return
-	else:
-		channel = ctx.message.author.voice.channel
-		bot.queue = music_queue()
-		await ctx.send(f'Connected to ``{channel}``')
-		await channel.connect()
-		return
-
-@bot.command()
 async def leave(ctx):
 
+	bot.queue.purge()
 	await ctx.voice_client.disconnect()
-	bot.queue = None
 	shutil.rmtree('session/') # temporary cleanup procedure, will add caching later
 
 @bot.command()
@@ -92,16 +76,25 @@ async def skip(ctx):
 @bot.command()
 async def shuffle(ctx):
 
-	if bot.queue:
-		bot.queue.random = not bot.queue.random
-		await ctx.send("shuffle set to {0}".format(bot.queue.random))
+	roleid = bot.config['guild']['roleid']
+
+	if(ctx.author.voice == None):
+		await ctx.send("you are not in a voice channel")
+		return
+	elif(roleid not in [role.id for role in ctx.author.roles]):
+		await ctx.send("you do not have the role to play music")
+		return
+	elif(not ctx.voice_client.is_connected()):
+		await ctx.send("bot is not connected to a voice channel")
 	else:
-		await ctx.send("not in a voice chat, use {0}join".format(bot.config['guild']['prefix']))
+		bot.queue.shuffle()
+		await ctx.send(embed=get_status(ctx.voice_client.channel, bot.queue, bot.currently_playing))
 
 @bot.command()
 async def play(ctx, *arg):
 
 	roleid = bot.config['guild']['roleid']
+	prefix = bot.config['guild']['prefix']
 
 	if(len(arg) != 1):
 		await ctx.send("usage: play <YouTube url>")
@@ -112,8 +105,14 @@ async def play(ctx, *arg):
 	elif(roleid not in [role.id for role in ctx.author.roles]):
 		await ctx.send("you do not have the role to play music")
 		return
-	elif(bot.queue == None):
-		await ctx.send("not in a voice chat, use {0}join".format(bot.config['guild']['prefix']))
+
+	if(ctx.voice_client == None): # if not in vc, join
+		channel = ctx.message.author.voice.channel
+		await ctx.send(f'Connected to ``{channel}``')
+		await channel.connect()
+		bot.queue.random = False
+	elif (ctx.voice_client.channel != ctx.author.voice.channel): # if in another vc than author, ignore
+		await ctx.send("bot already connected to another channel, use {0}leave".format(prefix))
 		return
 
 	url = arg[0]
@@ -137,48 +136,39 @@ async def play(ctx, *arg):
 	else:
 		await bot.start_playing(ctx)
 
-async def start_playing(ctx):
+async def start_playing(ctx): # should guarantee ctx.voice_client.is_playing() is True
 
 	event = asyncio.Event()
 	event.set()
 
-	try:
+	while bot.queue.has_next():
 
-		while bot.queue.has_next():
+		event.clear()
 
-			event.clear()
+		yt = bot.queue.dequeue()
+		name = yt.title
+		duration = yt.length
 
-			yt = bot.queue.dequeue()
-			name = yt.title
-			duration = yt.length
+		bot.currently_playing = name
 
-			filepath = 'session/'
-			fileprefix = ''
-			filename = name
+		filepath = 'session/'
+		fileprefix = ''
+		filename = name
 
-			if duration < bot.config['max-length']:
+		if duration < bot.config['max-length']:
 
-				await ctx.send('playing {0} | {1} tracks remaining in queue'.format(name, len(bot.queue.elem)))
+			await ctx.send(embed=get_status(ctx.voice_client.channel, bot.queue, bot.currently_playing))
 
-				yt.streams.filter(only_audio=True, file_extension='mp4').last().download(output_path=filepath, filename=filename, filename_prefix=fileprefix)
-				path = filepath + fileprefix + filename
-				print("play here")
-				ctx.voice_client.play(discord.FFmpegPCMAudio(path), after=lambda e:event.set())
+			##await ctx.send('playing {0} | {1} tracks remaining in queue'.format(name, bot.queue.num_remaining()))
 
-			else:
-				await ctx.send('{0} is too long: {1} > {2}'.format(name, duration, bot.config['max-length']))
+			yt.streams.filter(only_audio=True, file_extension='mp4').last().download(output_path=filepath, filename=filename, filename_prefix=fileprefix)
+			path = filepath + fileprefix + filename
+			ctx.voice_client.play(discord.FFmpegPCMAudio(path), after=lambda e:event.set())
 
-			await event.wait()
+		else:
+			await ctx.send('{0} is too long: {1} > {2}'.format(name, duration, bot.config['max-length']))
 
-	except AttributeError:
-		pass
-
-	except Exception as e:
-		print(e)
-
-	await ctx.voice_client.disconnect()
-	bot.queue = None
-	shutil.rmtree('session/') # temporary cleanup procedure, will add caching later
+		await event.wait()
 
 bot.start_playing = start_playing
 
