@@ -28,7 +28,8 @@ def get_search_results(query, results):
 	lst = ""
 	for i in range(0, min(10, len(results))):
 		title = results[i].title
-		lst += "{0}: {1}\n".format(str(i), title)
+		author = results[i].author
+		lst += "{0}: {1} | {2}\n".format(str(i), author, title)
 	if lst == "":
 		lst = "no results"
 	emb.add_field(name="{0} results found: ".format(len(results)), value=lst)
