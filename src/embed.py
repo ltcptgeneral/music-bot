@@ -21,3 +21,15 @@ def get_error(message):
 def get_success(message):
 	emb = discord.Embed(title='music-bot', description=message,color=0x00FF00)
 	return emb
+
+def get_search_results(query, results):
+	desc = 'search for: {0}'.format(query)
+	emb = discord.Embed(title='music-bot', description=desc,color=0x0000FF)
+	lst = ""
+	for i in range(0, min(10, len(results))):
+		title = results[i].title
+		lst += "{0}: {1}\n".format(str(i), title)
+	if lst == "":
+		lst = "no results"
+	emb.add_field(name="{0} results found: ".format(len(results)), value=lst)
+	return emb

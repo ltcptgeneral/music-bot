@@ -1,10 +1,12 @@
 import asyncio
+from re import L
 from config import *
 import discord
 from discord.ext import commands
 from embed import *
-from pytube import YouTube, Playlist
+from pytube import YouTube, Playlist, Search
 import shutil
+from embed import get_search_results
 
 from music_queue import music_queue
 
@@ -34,6 +36,7 @@ async def on_ready():
 	print('------')
 	bot.queue = music_queue()
 	bot.currently_playing = ""
+	bot.previous_search = None
 
 @bot.command()
 async def setprefix(ctx, *arg):
@@ -65,6 +68,7 @@ async def setrole(ctx, *arg: discord.Role):
 async def leave(ctx):
 
 	bot.queue.purge()
+	bot.previous_search = None
 	await ctx.voice_client.disconnect()
 	shutil.rmtree('session/') # temporary cleanup procedure, will add caching later
 
@@ -77,11 +81,14 @@ async def skip(ctx, *args):
 		x = bot.queue.dequeue()
 		await ctx.send(embed=get_success("skipped {0}".format(x.title)))
 		await ctx.send(embed=get_status(ctx.voice_client.channel, bot.queue, bot.currently_playing))
-	elif (len(args) == 1) and args[0].isdigit(): 
+	elif (len(args) == 1) and args[0].lstrip('-+').isdigit(): 
 		index = int(args[0])
-		x = bot.queue.elem.pop(index)
-		await ctx.send(embed=get_success("skipped {0}".format(x.title)))
-		await ctx.send(embed=get_status(ctx.voice_client.channel, bot.queue, bot.currently_playing))
+		if(index >= bot.queue.num_remaining() or index < 0):
+			await ctx.send(embed=get_error("index {0} out of range in queue of length {1}".format(index, bot.queue.num_remaining())))
+		else:
+			x = bot.queue.elem.pop(index)
+			await ctx.send(embed=get_success("skipped {0}".format(x.title)))
+			await ctx.send(embed=get_status(ctx.voice_client.channel, bot.queue, bot.currently_playing))
 	else:
 		await ctx.send(embed=get_error("usage:\nskip | skips this track\nskip next | skips the next track\nskip <index> | skips the track at index\n"))
 
@@ -103,13 +110,13 @@ async def shuffle(ctx):
 		await ctx.send(embed=get_status(ctx.voice_client.channel, bot.queue, bot.currently_playing))
 
 @bot.command()
-async def play(ctx, *arg):
+async def play(ctx, *args):
 
 	roleid = bot.config['guild']['roleid']
 	prefix = bot.config['guild']['prefix']
 
-	if(len(arg) != 1):
-		await ctx.send(embed=get_error("usage: play <YouTube url>"))
+	if(len(args) != 1):
+		await ctx.send(embed=get_error("usage: {0}play <YouTube url>".format(prefix)))
 		return
 	elif(ctx.author.voice == None):
 		await ctx.send(embed=get_error("you are not in a voice channel"))
@@ -117,6 +124,34 @@ async def play(ctx, *arg):
 	elif(roleid not in [role.id for role in ctx.author.roles]):
 		await ctx.send(embed=get_error("you do not have the role to play music"))
 		return
+
+	if args[0].lstrip('-+').isdigit():
+		if bot.previous_search:
+			index = int(args[0])
+			if index >= len(bot.previous_search) or index < 0:
+				await ctx.send(embed=get_error('index {0} out of range in results of length {1}'.format(index, len(bot.previous_search))))
+				return
+			else:
+				yt = bot.previous_search[index]
+				bot.queue.enqueue(yt)
+				await ctx.send(embed=get_success('added {0} to queue'.format(yt.title)))
+		else:
+			await ctx.send(embed=get_error('no previous search found, use {0}search'.format(prefix)))
+			return
+	else:
+		url = args[0]
+		count = 0
+		if 'list=' in url:
+			pl = Playlist(url)
+			for video in pl:
+				yt = YouTube(video)
+				bot.queue.enqueue(yt)
+				count += 1
+			await ctx.send(embed=get_success('added {0} tracks to queue'.format(len(pl))))
+		else:
+			yt = YouTube(url)
+			bot.queue.enqueue(yt)
+			await ctx.send(embed=get_success('added {0} to queue'.format(yt.title)))
 
 	if(ctx.voice_client == None): # if not in vc, join
 		channel = ctx.message.author.voice.channel
@@ -126,22 +161,6 @@ async def play(ctx, *arg):
 	elif (ctx.voice_client.channel != ctx.author.voice.channel): # if in another vc than author, ignore
 		await ctx.send(embed=get_error("bot already connected to another channel, use {0}leave".format(prefix)))
 		return
-
-	url = arg[0]
-
-	count = 0
-
-	if 'list=' in url:
-		pl = Playlist(url)
-		for video in pl:
-			yt = YouTube(video)
-			bot.queue.enqueue(yt)
-			count += 1
-		await ctx.send(embed=get_success('added {0} tracks to queue'.format(len(pl))))
-	else:
-		yt = YouTube(url)
-		bot.queue.enqueue(yt)
-		await ctx.send(embed=get_success('added {0} to queue'.format(yt.title)))
 
 	if(ctx.voice_client.is_playing()):
 		pass
@@ -182,5 +201,30 @@ async def start_playing(ctx): # should guarantee ctx.voice_client.is_playing() i
 		await event.wait()
 
 bot.start_playing = start_playing
+
+@bot.command()
+async def search(ctx, *args):
+
+	roleid = bot.config['guild']['roleid']
+	prefix = bot.config['guild']['prefix']
+
+	if(len(args) == 0):
+		await ctx.send(embed=get_error("usage: {0}search <query>".format(prefix)))
+		return
+	elif(ctx.author.voice == None):
+		await ctx.send(embed=get_error("you are not in a voice channel"))
+		return
+	elif(roleid not in [role.id for role in ctx.author.roles]):
+		await ctx.send(embed=get_error("you do not have the role to play music"))
+		return
+
+	query = ""
+
+	for w in args:
+		query += w + " "
+
+	s = Search(query)
+	bot.previous_search = s.results
+	await ctx.send(embed=get_search_results(query, s.results))
 
 bot.run(token)
