@@ -10,7 +10,7 @@ def get_status(channel, queue, playing):
 		lst += "{0}: {1}\n".format(str(i), title)
 	if lst == "":
 		lst = "empty queue"
-	emb.add_field(name="next up: ", value=lst)
+	emb.add_field(name="{0} tracks left in queue".format(queue.num_remaining()), value=lst)
 	emb.set_thumbnail(url=playing.thumbnail_url)
 	return emb
 

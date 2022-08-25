@@ -69,9 +69,21 @@ async def leave(ctx):
 	shutil.rmtree('session/') # temporary cleanup procedure, will add caching later
 
 @bot.command()
-async def skip(ctx):
+async def skip(ctx, *args):
 
-	ctx.voice_client.stop() # stops and skips the current track
+	if (len(args) == 0):
+		ctx.voice_client.stop() # stops and skips the current track
+	elif (len(args) == 1) and args[0] == "next":
+		x = bot.queue.dequeue()
+		await ctx.send(embed=get_success("skipped {0}".format(x.title)))
+		await ctx.send(embed=get_status(ctx.voice_client.channel, bot.queue, bot.currently_playing))
+	elif (len(args) == 1) and args[0].isdigit(): 
+		index = int(args[0])
+		x = bot.queue.elem.pop(index)
+		await ctx.send(embed=get_success("skipped {0}".format(x.title)))
+		await ctx.send(embed=get_status(ctx.voice_client.channel, bot.queue, bot.currently_playing))
+	else:
+		await ctx.send(embed=get_error("usage:\nskip | skips this track\nskip next | skips the next track\nskip <index> | skips the track at index\n"))
 
 @bot.command()
 async def shuffle(ctx):
@@ -147,26 +159,25 @@ async def start_playing(ctx): # should guarantee ctx.voice_client.is_playing() i
 
 		yt = bot.queue.dequeue()
 		name = yt.title
+		id = yt.vid_info['videoDetails']['videoId']
 		duration = yt.length
 
 		bot.currently_playing = yt
 
 		filepath = 'session/'
 		fileprefix = ''
-		filename = name
+		filename = id
 
 		if duration < bot.config['max-length']:
 
 			await ctx.send(embed=get_status(ctx.voice_client.channel, bot.queue, bot.currently_playing))
-
-			##await ctx.send('playing {0} | {1} tracks remaining in queue'.format(name, bot.queue.num_remaining()))
 
 			yt.streams.filter(only_audio=True, file_extension='mp4').last().download(output_path=filepath, filename=filename, filename_prefix=fileprefix)
 			path = filepath + fileprefix + filename
 			ctx.voice_client.play(discord.FFmpegPCMAudio(path), after=lambda e:event.set())
 
 		else:
-			await ctx.send('{0} is too long: {1} > {2}'.format(name, duration, bot.config['max-length']))
+			await ctx.send(embed=get_error('{0} is too long: {1} > {2}'.format(name, duration, bot.config['max-length'])))
 
 		await event.wait()
 
