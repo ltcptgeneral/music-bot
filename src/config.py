@@ -8,6 +8,7 @@ sample_json = """
 		"roleid": 0,
 		"username": "music-bot"
 	},
+	"max-length": 6000
 }
 """
 
