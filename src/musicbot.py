@@ -2,7 +2,7 @@ import asyncio
 from config import *
 import discord
 from discord.ext import commands
-from embed import get_status
+from embed import *
 from pytube import YouTube, Playlist
 import shutil
 
@@ -38,7 +38,7 @@ async def on_ready():
 @bot.command()
 async def setprefix(ctx, *arg):
 	if(len(arg) != 1):
-		await ctx.send("usage: setprefix <prefix>")
+		await ctx.send(embed=get_error("usage: setprefix <prefix>"))
 
 	else:
 		prefix = arg[0]
@@ -46,12 +46,12 @@ async def setprefix(ctx, *arg):
 		bot.config['guild']['prefix'] = prefix
 		save_config(config_path, bot.config)
 
-		await ctx.send("set prefix to: {0}".format(prefix))
+		await ctx.send(embed=get_success("set prefix to: {0}".format(prefix)))
 
 @bot.command()
 async def setrole(ctx, *arg: discord.Role):
 	if(len(arg) != 1):
-		await ctx.send("usage: setrole @<rolename>")
+		await ctx.send(embed=get_error("usage: setrole @<rolename>"))
 
 	else:
 		roleid = arg[0].id
@@ -59,7 +59,7 @@ async def setrole(ctx, *arg: discord.Role):
 		bot.config['guild']['roleid'] = roleid
 		save_config(config_path, bot.config)
 
-		await ctx.send("set playable role to {0}".format(arg[0]))
+		await ctx.send(embed=get_success("set playable role to {0}".format(arg[0])))
 
 @bot.command()
 async def leave(ctx):
@@ -79,13 +79,13 @@ async def shuffle(ctx):
 	roleid = bot.config['guild']['roleid']
 
 	if(ctx.author.voice == None):
-		await ctx.send("you are not in a voice channel")
+		await ctx.send(embed=get_error("you are not in a voice channel"))
 		return
 	elif(roleid not in [role.id for role in ctx.author.roles]):
-		await ctx.send("you do not have the role to play music")
+		await ctx.send(embed=get_error("you do not have the role to play music"))
 		return
 	elif(not ctx.voice_client.is_connected()):
-		await ctx.send("bot is not connected to a voice channel")
+		await ctx.send(embed=get_error("bot is not connected to a voice channel"))
 	else:
 		bot.queue.shuffle()
 		await ctx.send(embed=get_status(ctx.voice_client.channel, bot.queue, bot.currently_playing))
@@ -97,22 +97,22 @@ async def play(ctx, *arg):
 	prefix = bot.config['guild']['prefix']
 
 	if(len(arg) != 1):
-		await ctx.send("usage: play <YouTube url>")
+		await ctx.send(embed=get_error("usage: play <YouTube url>"))
 		return
 	elif(ctx.author.voice == None):
-		await ctx.send("you are not in a voice channel")
+		await ctx.send(embed=get_error("you are not in a voice channel"))
 		return
 	elif(roleid not in [role.id for role in ctx.author.roles]):
-		await ctx.send("you do not have the role to play music")
+		await ctx.send(embed=get_error("you do not have the role to play music"))
 		return
 
 	if(ctx.voice_client == None): # if not in vc, join
 		channel = ctx.message.author.voice.channel
-		await ctx.send(f'Connected to ``{channel}``')
+		await ctx.send(embed=get_success('Connected to ``{0}``'.format(channel)))
 		await channel.connect()
 		bot.queue.random = False
 	elif (ctx.voice_client.channel != ctx.author.voice.channel): # if in another vc than author, ignore
-		await ctx.send("bot already connected to another channel, use {0}leave".format(prefix))
+		await ctx.send(embed=get_error("bot already connected to another channel, use {0}leave".format(prefix)))
 		return
 
 	url = arg[0]
@@ -125,11 +125,11 @@ async def play(ctx, *arg):
 			yt = YouTube(video)
 			bot.queue.enqueue(yt)
 			count += 1
-		await ctx.send('added {0} tracks to queue'.format(len(pl)))
+		await ctx.send(embed=get_success('added {0} tracks to queue'.format(len(pl))))
 	else:
 		yt = YouTube(url)
 		bot.queue.enqueue(yt)
-		await ctx.send('added {0} to queue'.format(yt.title))
+		await ctx.send(embed=get_success('added {0} to queue'.format(yt.title)))
 
 	if(ctx.voice_client.is_playing()):
 		pass
@@ -149,7 +149,7 @@ async def start_playing(ctx): # should guarantee ctx.voice_client.is_playing() i
 		name = yt.title
 		duration = yt.length
 
-		bot.currently_playing = name
+		bot.currently_playing = yt
 
 		filepath = 'session/'
 		fileprefix = ''
