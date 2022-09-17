@@ -227,4 +227,60 @@ async def search(ctx, *args):
 	bot.previous_search = s.results
 	await ctx.send(embed=get_search_results(query, s.results))
 
+@bot.command()
+async def peek(ctx, *args):
+
+	roleid = bot.config['guild']['roleid']
+	prefix = bot.config['guild']['prefix']
+
+	if(len(args) != 0):
+		await ctx.send(embed=get_error("usage: {0}peek".format(prefix)))
+		return
+	elif(ctx.author.voice == None):
+		await ctx.send(embed=get_error("you are not in a voice channel"))
+		return
+	elif(roleid not in [role.id for role in ctx.author.roles]):
+		await ctx.send(embed=get_error("you do not have the role to play music"))
+		return
+
+	await ctx.send(embed=get_queue(ctx.voice_client.channel, bot.queue, bot.currently_playing))
+
+@bot.command()
+async def pause(ctx, *args):
+
+	roleid = bot.config['guild']['roleid']
+	prefix = bot.config['guild']['prefix']
+
+	if(len(args) != 0):
+		await ctx.send(embed=get_error("usage: {0}pause".format(prefix)))
+		return
+	elif(ctx.author.voice == None):
+		await ctx.send(embed=get_error("you are not in a voice channel"))
+		return
+	elif(roleid not in [role.id for role in ctx.author.roles]):
+		await ctx.send(embed=get_error("you do not have the role to play music"))
+		return
+
+	ctx.voice_client.pause()
+	await ctx.send(embed=get_success("paused"))
+
+@bot.command()
+async def resume(ctx, *args):
+
+	roleid = bot.config['guild']['roleid']
+	prefix = bot.config['guild']['prefix']
+
+	if(len(args) != 0):
+		await ctx.send(embed=get_error("usage: {0}resume".format(prefix)))
+		return
+	elif(ctx.author.voice == None):
+		await ctx.send(embed=get_error("you are not in a voice channel"))
+		return
+	elif(roleid not in [role.id for role in ctx.author.roles]):
+		await ctx.send(embed=get_error("you do not have the role to play music"))
+		return
+
+	ctx.voice_client.resume()
+	await ctx.send(embed=get_success("resumed"))
+
 bot.run(token)

@@ -4,6 +4,17 @@ from pytube import YouTube
 def get_status(channel, queue, playing):
 	desc = 'playing {0} in {1}'.format(playing.title, channel)
 	emb = discord.Embed(title='music-bot', description=desc,color=0x0000FF)
+	if(queue.has_next()):
+		lst = "next up: {0}".format(queue.elem[0].title)
+	else:
+		lst = "empty queue"
+	emb.add_field(name="{0} tracks left in queue".format(queue.num_remaining()), value=lst)
+	emb.set_thumbnail(url=playing.thumbnail_url)
+	return emb
+
+def get_queue(channel, queue, playing):
+	desc = 'playing {0} in {1}'.format(playing.title, channel)
+	emb = discord.Embed(title='music-bot', description=desc,color=0x0000FF)
 	lst = ""
 	for i in range(0, min(10, queue.num_remaining())):
 		title = queue.elem[i].title
