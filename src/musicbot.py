@@ -4,7 +4,7 @@ from config import *
 import discord
 from discord.ext import commands
 from embed import *
-from pytube import YouTube, Playlist, Search
+from pytube import YouTube, Playlist, Search, exceptions
 import shutil
 from embed import get_search_results
 
@@ -70,7 +70,10 @@ async def leave(ctx):
 	bot.queue.purge()
 	bot.previous_search = None
 	await ctx.voice_client.disconnect()
-	shutil.rmtree('session/') # temporary cleanup procedure, will add caching later
+	try:
+		shutil.rmtree('session/') # temporary cleanup procedure, will add caching later
+	except FileNotFoundError: # if there is no session folder that's probably ok, just continue
+		pass
 
 @bot.command()
 async def skip(ctx, *args):
@@ -190,10 +193,13 @@ async def start_playing(ctx): # should guarantee ctx.voice_client.is_playing() i
 		if duration < bot.config['max-length']:
 
 			await ctx.send(embed=get_status(ctx.voice_client.channel, bot.queue, bot.currently_playing))
-
-			yt.streams.filter(only_audio=True, file_extension='mp4').last().download(output_path=filepath, filename=filename, filename_prefix=fileprefix)
-			path = filepath + fileprefix + filename
-			ctx.voice_client.play(discord.FFmpegPCMAudio(path), after=lambda e:event.set())
+			try: # try to get the music and then start playing
+				yt.streams.filter(only_audio=True, file_extension='mp4').last().download(output_path=filepath, filename=filename, filename_prefix=fileprefix)
+				path = filepath + fileprefix + filename
+				ctx.voice_client.play(discord.FFmpegPCMAudio(path), after=lambda e:event.set())
+			except exceptions.AgeRestrictedError: # if it is age restricted, just skip
+				await ctx.send(embed=get_error('{0} is age restricted'.format(name, duration, bot.config['max-length'])))
+				event.set()
 
 		else:
 			await ctx.send(embed=get_error('{0} is too long: {1} > {2}'.format(name, duration, bot.config['max-length'])))
