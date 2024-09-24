@@ -33,15 +33,20 @@ def get_success(message):
 	emb = discord.Embed(title='music-bot', description=message,color=0x00FF00)
 	return emb
 
-def get_search_results(query, results):
+def get_search_results(query, results, max_results = 10):
 	desc = 'search for: {0}'.format(query)
 	emb = discord.Embed(title='music-bot', description=desc,color=0x0000FF)
+	# need to limit number of results because of embedded message limit
+	num_results = min(max_results, len(results))
 	lst = ""
-	for i in range(0, min(10, len(results))):
+	for i in range(0, num_results):
+		# need to limit length of each search result because of embedded message limit
 		title = results[i].title
+		title_trunc = title[0:70]
 		author = results[i].author
-		lst += "{0}: {1} | {2}\n".format(str(i), author, title)
+		author_trunc = author[0:20]
+		lst += "{0}: {1} | {2}\n".format(str(i), author_trunc, title_trunc)
 	if lst == "":
 		lst = "no results"
-	emb.add_field(name="{0} results found: ".format(len(results)), value=lst)
+	emb.add_field(name="{0} results found: ".format(num_results), value=lst)
 	return emb

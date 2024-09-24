@@ -4,9 +4,12 @@ from config import *
 import discord
 from discord.ext import commands
 from embed import *
-from pytube import YouTube, Playlist, Search, exceptions
+from pytube import Playlist, Search, exceptions
 import shutil
 from embed import get_search_results
+
+from pytubefix import YouTube
+from pytubefix.cli import on_progress
 
 from music_queue import music_queue
 
@@ -147,12 +150,12 @@ async def play(ctx, *args):
 		if 'list=' in url:
 			pl = Playlist(url)
 			for video in pl:
-				yt = YouTube(video)
+				yt = YouTube(video, on_progress_callback = on_progress)
 				bot.queue.enqueue(yt)
 				count += 1
 			await ctx.send(embed=get_success('added {0} tracks to queue'.format(len(pl))))
 		else:
-			yt = YouTube(url)
+			yt = YouTube(url, on_progress_callback = on_progress)
 			bot.queue.enqueue(yt)
 			await ctx.send(embed=get_success('added {0} to queue'.format(yt.title)))
 
