@@ -1,9 +1,9 @@
-import discord
+import nextcord
 from pytube import YouTube
 
 def get_status(channel, queue, playing):
 	desc = 'playing {0} in {1}'.format(playing.title, channel)
-	emb = discord.Embed(title='music-bot', description=desc,color=0x0000FF)
+	emb = nextcord.Embed(title='music-bot', description=desc,color=0x0000FF)
 	if(queue.has_next()):
 		lst = "next up: {0}".format(queue.elem[0].title)
 	else:
@@ -14,7 +14,7 @@ def get_status(channel, queue, playing):
 
 def get_queue(channel, queue, playing):
 	desc = 'playing {0} in {1}'.format(playing.title, channel)
-	emb = discord.Embed(title='music-bot', description=desc,color=0x0000FF)
+	emb = nextcord.Embed(title='music-bot', description=desc,color=0x0000FF)
 	lst = ""
 	for i in range(0, min(10, queue.num_remaining())):
 		title = queue.elem[i].title
@@ -26,16 +26,16 @@ def get_queue(channel, queue, playing):
 	return emb
 
 def get_error(message):
-	emb = discord.Embed(title='music-bot', description=message,color=0xFF0000)
+	emb = nextcord.Embed(title='music-bot', description=message,color=0xFF0000)
 	return emb
 
 def get_success(message):
-	emb = discord.Embed(title='music-bot', description=message,color=0x00FF00)
+	emb = nextcord.Embed(title='music-bot', description=message,color=0x00FF00)
 	return emb
 
 def get_search_results(query, results, max_results = 10):
 	desc = 'search for: {0}'.format(query)
-	emb = discord.Embed(title='music-bot', description=desc,color=0x0000FF)
+	emb = nextcord.Embed(title='music-bot', description=desc,color=0x0000FF)
 	# need to limit number of results because of embedded message limit
 	num_results = min(max_results, len(results))
 	lst = ""
