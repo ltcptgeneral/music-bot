@@ -1,8 +1,8 @@
 import asyncio
 from re import L
 from config import *
-import discord
-from discord.ext import commands
+import nextcord
+from nextcord.ext import commands
 from embed import *
 from pytube import Playlist, Search, exceptions
 import shutil
@@ -27,7 +27,7 @@ if x == 1:
 token = config['guild']['token']
 prefix = config['guild']['prefix']
 
-intents = discord.Intents.default()
+intents = nextcord.Intents.default()
 intents.members = True
 intents.message_content = True
 bot = commands.Bot(command_prefix = prefix, description='very cool', intents = intents)
@@ -55,7 +55,7 @@ async def setprefix(ctx, *arg):
 		await ctx.send(embed=get_success("set prefix to: {0}".format(prefix)))
 
 @bot.command()
-async def setrole(ctx, *arg: discord.Role):
+async def setrole(ctx, *arg: nextcord.Role):
 	if(len(arg) != 1):
 		await ctx.send(embed=get_error("usage: setrole @<rolename>"))
 
@@ -199,7 +199,7 @@ async def start_playing(ctx): # should guarantee ctx.voice_client.is_playing() i
 			try: # try to get the music and then start playing
 				yt.streams.filter(only_audio=True, file_extension='mp4').last().download(output_path=filepath, filename=filename, filename_prefix=fileprefix)
 				path = filepath + fileprefix + filename
-				ctx.voice_client.play(discord.FFmpegPCMAudio(path), after=lambda e:event.set())
+				ctx.voice_client.play(nextcord.FFmpegPCMAudio(path), after=lambda e:event.set())
 			except exceptions.AgeRestrictedError: # if it is age restricted, just skip
 				await ctx.send(embed=get_error('{0} is age restricted'.format(name, duration, bot.config['max-length'])))
 				event.set()
