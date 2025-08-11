@@ -4,7 +4,6 @@ sample_json = """
 {
 	"guild":{
 		"token": "",
-		"prefix": "?",
 		"roleid": 0,
 		"username": "music-bot"
 	},

@@ -7,6 +7,8 @@ from embed import *
 from pytube import Playlist, Search, exceptions
 import shutil
 from embed import get_search_results
+from parse import search, parse
+from typing import Optional
 
 from pytubefix import YouTube
 from pytubefix.cli import on_progress
@@ -25,12 +27,11 @@ if x == 1:
 	print('Failed to load config, exiting')
 	exit(1)
 token = config['guild']['token']
-prefix = config['guild']['prefix']
 
 intents = nextcord.Intents.default()
 intents.members = True
 intents.message_content = True
-bot = commands.Bot(command_prefix = prefix, description='very cool', intents = intents)
+bot = commands.Bot(description='very cool', intents = intents)
 bot.config = config
 
 @bot.event
@@ -40,100 +41,84 @@ async def on_ready():
 	bot.queue = music_queue()
 	bot.currently_playing = ""
 	bot.previous_search = None
+	print('Initialized queue')
 
-@bot.command()
-async def setprefix(ctx, *arg):
-	if(len(arg) != 1):
-		await ctx.send(embed=get_error("usage: setprefix <prefix>"))
+@bot.slash_command()
+async def setrole(ctx, role: nextcord.Role):
+	await ctx.response.defer()
+	roleid = role.id
 
-	else:
-		prefix = arg[0]
+	bot.config['guild']['roleid'] = roleid
+	save_config(config_path, bot.config)
 
-		bot.config['guild']['prefix'] = prefix
-		save_config(config_path, bot.config)
+	await ctx.send(embed=get_success("set playable role to {0}".format(role[0])))
 
-		await ctx.send(embed=get_success("set prefix to: {0}".format(prefix)))
-
-@bot.command()
-async def setrole(ctx, *arg: nextcord.Role):
-	if(len(arg) != 1):
-		await ctx.send(embed=get_error("usage: setrole @<rolename>"))
-
-	else:
-		roleid = arg[0].id
-
-		bot.config['guild']['roleid'] = roleid
-		save_config(config_path, bot.config)
-
-		await ctx.send(embed=get_success("set playable role to {0}".format(arg[0])))
-
-@bot.command()
+@bot.slash_command()
 async def leave(ctx):
-
+	await ctx.response.defer()
 	bot.queue.purge()
 	bot.previous_search = None
-	await ctx.voice_client.disconnect()
+	await ctx.guild.voice_client.disconnect()
+	await ctx.send(embed=get_success("left voice channel and cleared queue"))
 	try:
 		shutil.rmtree('session/') # temporary cleanup procedure, will add caching later
 	except FileNotFoundError: # if there is no session folder that's probably ok, just continue
 		pass
 
-@bot.command()
-async def skip(ctx, *args):
-
-	if (len(args) == 0):
-		ctx.voice_client.stop() # stops and skips the current track
-	elif (len(args) == 1) and args[0] == "next":
+@bot.slash_command()
+async def skip(ctx, track: Optional[str] = nextcord.SlashOption(required=False)):
+	await ctx.response.defer()
+	if (track == None): # stops and skips the current track
+		ctx.guild.voice_client.stop()
+		x = bot.currently_playing
+		await ctx.send(embed=get_success("skipped {0}".format(x.title)))
+	elif track == "next": # skips the next track
 		x = bot.queue.dequeue()
 		await ctx.send(embed=get_success("skipped {0}".format(x.title)))
-		await ctx.send(embed=get_status(ctx.voice_client.channel, bot.queue, bot.currently_playing))
-	elif (len(args) == 1) and args[0].lstrip('-+').isdigit(): 
-		index = int(args[0])
+		await ctx.send(embed=get_status(ctx.guild.voice_client.channel, bot.queue, bot.currently_playing))
+	elif await search("{:d}", track): 
+		index = await parse("{:d}", track)[0]
 		if(index >= bot.queue.num_remaining() or index < 0):
 			await ctx.send(embed=get_error("index {0} out of range in queue of length {1}".format(index, bot.queue.num_remaining())))
 		else:
 			x = bot.queue.elem.pop(index)
 			await ctx.send(embed=get_success("skipped {0}".format(x.title)))
-			await ctx.send(embed=get_status(ctx.voice_client.channel, bot.queue, bot.currently_playing))
+			await ctx.send(embed=get_status(ctx.guild.voice_client.channel, bot.queue, bot.currently_playing))
 	else:
 		await ctx.send(embed=get_error("usage:\nskip | skips this track\nskip next | skips the next track\nskip <index> | skips the track at index\n"))
 
-@bot.command()
+@bot.slash_command()
 async def shuffle(ctx):
-
+	await ctx.response.defer()
 	roleid = bot.config['guild']['roleid']
 
-	if(ctx.author.voice == None):
+	if(ctx.user.voice == None):
 		await ctx.send(embed=get_error("you are not in a voice channel"))
 		return
-	elif(roleid not in [role.id for role in ctx.author.roles]):
+	elif(roleid not in [role.id for role in ctx.user.roles]):
 		await ctx.send(embed=get_error("you do not have the role to play music"))
 		return
-	elif(not ctx.voice_client.is_connected()):
+	elif(ctx.guild.voice_client == None):
 		await ctx.send(embed=get_error("bot is not connected to a voice channel"))
 	else:
 		bot.queue.shuffle()
-		await ctx.send(embed=get_status(ctx.voice_client.channel, bot.queue, bot.currently_playing))
+		await ctx.send(embed=get_status(ctx.guild.voice_client.channel, bot.queue, bot.currently_playing))
 
-@bot.command()
-async def play(ctx, *args):
-
+@bot.slash_command()
+async def play(ctx: nextcord.Interaction, url: str):
+	await ctx.response.defer()
 	roleid = bot.config['guild']['roleid']
-	prefix = bot.config['guild']['prefix']
 
-	if(len(args) != 1):
-		await ctx.send(embed=get_error("usage: {0}play <YouTube url>".format(prefix)))
-		return
-	elif(ctx.author.voice == None):
+	if(ctx.user.voice == None):
 		await ctx.send(embed=get_error("you are not in a voice channel"))
 		return
-	elif(roleid not in [role.id for role in ctx.author.roles]):
+	elif(roleid not in [role.id for role in ctx.user.roles]):
 		await ctx.send(embed=get_error("you do not have the role to play music"))
 		return
 
-	if args[0].lstrip('-+').isdigit():
+	if url.lstrip('-+').isdigit():
 		if bot.previous_search:
-			index = int(args[0])
+			index = int(url)
 			if index >= len(bot.previous_search) or index < 0:
 				await ctx.send(embed=get_error('index {0} out of range in results of length {1}'.format(index, len(bot.previous_search))))
 				return
@@ -145,7 +130,6 @@ async def play(ctx, *args):
 			await ctx.send(embed=get_error('no previous search found, use {0}search'.format(prefix)))
 			return
 	else:
-		url = args[0]
 		count = 0
 		if 'list=' in url:
 			pl = Playlist(url)
@@ -159,22 +143,21 @@ async def play(ctx, *args):
 			bot.queue.enqueue(yt)
 			await ctx.send(embed=get_success('added {0} to queue'.format(yt.title)))
 
-	if(ctx.voice_client == None): # if not in vc, join
-		channel = ctx.message.author.voice.channel
+	if(ctx.guild.voice_client == None): # if not in vc, join
+		channel = ctx.user.voice.channel
 		await ctx.send(embed=get_success('Connected to ``{0}``'.format(channel)))
 		await channel.connect()
 		bot.queue.random = False
-	elif (ctx.voice_client.channel != ctx.author.voice.channel): # if in another vc than author, ignore
+	elif (ctx.guild.voice_client.channel != ctx.user.voice.channel): # if in another vc than author, ignore
 		await ctx.send(embed=get_error("bot already connected to another channel, use {0}leave".format(prefix)))
 		return
 
-	if(ctx.voice_client.is_playing()):
+	if(ctx.guild.voice_client.is_playing()):
 		pass
 	else:
 		await bot.start_playing(ctx)
 
-async def start_playing(ctx): # should guarantee ctx.voice_client.is_playing() is True
-
+async def start_playing(ctx): # should guarantee ctx.guild.voice_client.is_playing() is True
 	event = asyncio.Event()
 	event.set()
 
@@ -195,11 +178,11 @@ async def start_playing(ctx): # should guarantee ctx.voice_client.is_playing() i
 
 		if duration < bot.config['max-length']:
 
-			await ctx.send(embed=get_status(ctx.voice_client.channel, bot.queue, bot.currently_playing))
+			await ctx.send(embed=get_status(ctx.guild.voice_client.channel, bot.queue, bot.currently_playing))
 			try: # try to get the music and then start playing
 				yt.streams.filter(only_audio=True, file_extension='mp4').last().download(output_path=filepath, filename=filename, filename_prefix=fileprefix)
 				path = filepath + fileprefix + filename
-				ctx.voice_client.play(nextcord.FFmpegPCMAudio(path), after=lambda e:event.set())
+				ctx.guild.voice_client.play(nextcord.FFmpegPCMAudio(path), after=lambda e:event.set())
 			except exceptions.AgeRestrictedError: # if it is age restricted, just skip
 				await ctx.send(embed=get_error('{0} is age restricted'.format(name, duration, bot.config['max-length'])))
 				event.set()
@@ -211,85 +194,70 @@ async def start_playing(ctx): # should guarantee ctx.voice_client.is_playing() i
 
 bot.start_playing = start_playing
 
-@bot.command()
-async def search(ctx, *args):
-
+@bot.slash_command()
+async def search(ctx, query: str):
+	await ctx.response.defer()
 	roleid = bot.config['guild']['roleid']
-	prefix = bot.config['guild']['prefix']
 
-	if(len(args) == 0):
-		await ctx.send(embed=get_error("usage: {0}search <query>".format(prefix)))
-		return
-	elif(ctx.author.voice == None):
+	if(ctx.user.voice == None):
 		await ctx.send(embed=get_error("you are not in a voice channel"))
 		return
-	elif(roleid not in [role.id for role in ctx.author.roles]):
+	elif(roleid not in [role.id for role in ctx.user.roles]):
 		await ctx.send(embed=get_error("you do not have the role to play music"))
 		return
-
-	query = ""
-
-	for w in args:
-		query += w + " "
 
 	s = Search(query)
 	bot.previous_search = s.results
 	await ctx.send(embed=get_search_results(query, s.results))
 
-@bot.command()
-async def peek(ctx, *args):
-
+@bot.slash_command()
+async def peek(ctx):
+	await ctx.response.defer()
 	roleid = bot.config['guild']['roleid']
-	prefix = bot.config['guild']['prefix']
 
-	if(len(args) != 0):
-		await ctx.send(embed=get_error("usage: {0}peek".format(prefix)))
-		return
-	elif(ctx.author.voice == None):
+	if(ctx.user.voice == None):
 		await ctx.send(embed=get_error("you are not in a voice channel"))
 		return
-	elif(roleid not in [role.id for role in ctx.author.roles]):
+	elif(roleid not in [role.id for role in ctx.user.roles]):
 		await ctx.send(embed=get_error("you do not have the role to play music"))
 		return
+	elif(ctx.guild.voice_client == None):
+		await ctx.send(embed=get_error("bot is not connected to a voice channel"))
 
-	await ctx.send(embed=get_queue(ctx.voice_client.channel, bot.queue, bot.currently_playing))
+	await ctx.send(embed=get_queue(ctx.guild.voice_client.channel, bot.queue, bot.currently_playing))
 
-@bot.command()
-async def pause(ctx, *args):
-
+@bot.slash_command()
+async def pause(ctx):
+	await ctx.response.defer()
 	roleid = bot.config['guild']['roleid']
-	prefix = bot.config['guild']['prefix']
-
-	if(len(args) != 0):
-		await ctx.send(embed=get_error("usage: {0}pause".format(prefix)))
-		return
-	elif(ctx.author.voice == None):
+	
+	if(ctx.user.voice == None):
 		await ctx.send(embed=get_error("you are not in a voice channel"))
 		return
-	elif(roleid not in [role.id for role in ctx.author.roles]):
+	elif(roleid not in [role.id for role in ctx.user.roles]):
 		await ctx.send(embed=get_error("you do not have the role to play music"))
 		return
+	elif(ctx.guild.voice_client == None):
+		await ctx.send(embed=get_error("bot is not connected to a voice channel"))
 
-	ctx.voice_client.pause()
+	ctx.guild.voice_client.pause()
 	await ctx.send(embed=get_success("paused"))
 
-@bot.command()
-async def resume(ctx, *args):
-
+@bot.slash_command()
+async def resume(ctx):
+	await ctx.response.defer()
 	roleid = bot.config['guild']['roleid']
-	prefix = bot.config['guild']['prefix']
 
-	if(len(args) != 0):
-		await ctx.send(embed=get_error("usage: {0}resume".format(prefix)))
-		return
-	elif(ctx.author.voice == None):
+	if(ctx.user.voice == None):
 		await ctx.send(embed=get_error("you are not in a voice channel"))
 		return
-	elif(roleid not in [role.id for role in ctx.author.roles]):
+	elif(roleid not in [role.id for role in ctx.user.roles]):
 		await ctx.send(embed=get_error("you do not have the role to play music"))
 		return
+	elif(ctx.guild.voice_client == None):
+		await ctx.send(embed=get_error("bot is not connected to a voice channel"))
 
-	ctx.voice_client.resume()
+	ctx.guild.voice_client.resume()
 	await ctx.send(embed=get_success("resumed"))
 
 bot.run(token)
